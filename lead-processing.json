@@ -1,0 +1,473 @@
+{
+  "name": "Lesson 16 - Lead Processing",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "YOUR_WEBHOOK_PATH",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "66483571-3d9d-4b42-863b-fd9f3e9c183f",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "9be72c71-e8af-44b8-b17b-984fdb9a6a08",
+              "leftValue": "={{   String($json.body?.name ?? '').trim().length >= 2 &&   /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(     String($json.body?.email ?? '').trim()   ) &&   String($json.body?.service ?? '').trim() !== '' &&   $json.body?.budget_usd != null &&   String($json.body.budget_usd).trim() !== '' &&   Number.isFinite(Number($json.body.budget_usd)) &&   Number($json.body.budget_usd) > 0 &&   String($json.body?.source ?? '').trim() !== '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        224,
+        0
+      ],
+      "id": "91610345-499f-4651-8678-c6ac102602ad",
+      "name": "Перевірка заявки"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1fe532d9-5cf9-45af-8ce8-26b1bbd88935",
+              "name": "error_message",
+              "value": "={{   [     String($json.body?.name ?? '').trim().length < 2       ? \"Ім'я повинно містити мінімум 2 символи\" : '',      !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(       String($json.body?.email ?? '').trim()     )       ? 'Некоректний email' : '',      !String($json.body?.service ?? '').trim()       ? 'Вкажіть послугу' : '',      $json.body?.budget_usd == null ||     String($json.body.budget_usd).trim() === '' ||     !Number.isFinite(Number($json.body.budget_usd)) ||     Number($json.body.budget_usd) <= 0       ? 'Бюджет повинен бути числом більше 0' : '',      !String($json.body?.source ?? '').trim()       ? 'Вкажіть джерело заявки' : ''    ].filter(Boolean).join('; ') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        448,
+        96
+      ],
+      "id": "1e52bc59-d73a-4a71-aa89-683ab4dcb256",
+      "name": "Причини помилки"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  error_code: 'INVALID_LEAD',\n  message: $json.error_message\n}) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        672,
+        96
+      ],
+      "id": "bd5676db-0f05-463e-b8ad-05c60aed222e",
+      "name": "Відповідь — неправильна заявка"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "2524e140-a959-4989-a03b-86a9aabc1e5c",
+              "name": "lead_priority",
+              "value": "={{   Number($json.body.budget_usd) >= 1000     ? 'hot'     : Number($json.body.budget_usd) >= 300       ? 'warm'       : 'cold' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        448,
+        -96
+      ],
+      "id": "cbcfba6c-c59d-4d40-90bb-465a464dbbd8",
+      "name": "Класифікація ліда"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_LEADS_TAB_ID",
+          "mode": "list"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "email",
+              "lookupValue": "={{ String($json.body.email).trim().toLowerCase() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        672,
+        -96
+      ],
+      "id": "36117e8e-a74f-4a74-8d6f-7c0ee36383a3",
+      "name": "Пошук дубліката",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "09b131bf-662e-4fdd-8b4f-806e460492c1",
+              "leftValue": "={{ String($json.email ?? '').trim() !== '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        896,
+        -192
+      ],
+      "id": "a1351961-ce24-4dcb-81c7-94188f1908c4",
+      "name": "Лід уже існує?"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_LEADS_TAB_ID",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "lead_id": "={{ 'LEAD-' + $execution.id }}",
+            "created_at": "={{ $now.toISO() }}",
+            "name": "={{ $('Класифікація ліда').first().json.body.name }}",
+            "email": "={{ $('Класифікація ліда').first().json.body.email.trim().toLowerCase() }}",
+            "service": "={{ $('Класифікація ліда').first().json.body.service }}",
+            "budget_usd": "={{ Number($('Класифікація ліда').first().json.body.budget_usd) }}",
+            "source": "={{ $('Класифікація ліда').first().json.body.source }}",
+            "lead_priority": "={{ $('Класифікація ліда').first().json.lead_priority }}",
+            "status": "new"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "lead_id",
+              "displayName": "lead_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "service",
+              "displayName": "service",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "budget_usd",
+              "displayName": "budget_usd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lead_priority",
+              "displayName": "lead_priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1120,
+        -96
+      ],
+      "id": "4fe59f17-36d2-44a2-98ed-660f708b49ac",
+      "name": "Збереження нового ліда"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  error_code: 'LEAD_ALREADY_EXISTS',\n  message: 'Клієнт із таким email уже є в CRM',\n  email: $('Класифікація ліда').first().json.body.email.trim().toLowerCase()\n}) }}",
+        "options": {
+          "responseCode": 409
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1120,
+        -288
+      ],
+      "id": "d6d3a734-c2e8-45fe-9173-68ef6d236905",
+      "name": "Відповідь — лід уже існує"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: true,\n  message: 'Заявку успішно прийнято',\n  lead_id: $json.lead_id,\n  name: $json.name,\n  email: $json.email,\n  lead_priority: $json.lead_priority,\n  status: $json.status\n}) }}",
+        "options": {
+          "responseCode": 201
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1344,
+        -96
+      ],
+      "id": "7b9ed722-4802-4dab-a2e5-6aa67c969e2f",
+      "name": "Відповідь — заявку прийнято"
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{   '🎯 НОВИЙ ЛІД!\\n\\n' +   '🆔 ID: ' + $('Збереження нового ліда').first().json.lead_id + '\\n' +   '👤 Ім’я: ' + $('Збереження нового ліда').first().json.name + '\\n' +   '📧 Email: ' + $('Збереження нового ліда').first().json.email + '\\n' +   '📢 Послуга: ' + $('Збереження нового ліда').first().json.service + '\\n' +   '💰 Бюджет: $' + $('Збереження нового ліда').first().json.budget_usd + '\\n' +   '🔥 Пріоритет: ' + $('Збереження нового ліда').first().json.lead_priority.toUpperCase() + '\\n' +   '🌐 Джерело: ' + $('Збереження нового ліда').first().json.source + '\\n\\n' +   '📋 Статус: Нова заявка' }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1568,
+        -96
+      ],
+      "id": "150bb881-82a9-4f45-a7c7-94dcb02aee10",
+      "name": "Telegram — новий лід"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Перевірка заявки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Перевірка заявки": {
+      "main": [
+        [
+          {
+            "node": "Класифікація ліда",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Причини помилки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Причини помилки": {
+      "main": [
+        [
+          {
+            "node": "Відповідь — неправильна заявка",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Класифікація ліда": {
+      "main": [
+        [
+          {
+            "node": "Пошук дубліката",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Пошук дубліката": {
+      "main": [
+        [
+          {
+            "node": "Лід уже існує?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Лід уже існує?": {
+      "main": [
+        [
+          {
+            "node": "Відповідь — лід уже існує",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Збереження нового ліда",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Збереження нового ліда": {
+      "main": [
+        [
+          {
+            "node": "Відповідь — заявку прийнято",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Відповідь — заявку прийнято": {
+      "main": [
+        [
+          {
+            "node": "Telegram — новий лід",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": []
+}

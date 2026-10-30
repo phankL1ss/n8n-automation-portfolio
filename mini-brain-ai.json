@@ -1,0 +1,1160 @@
+{
+  "name": "Mini Brain AI — Main",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        -288,
+        0
+      ],
+      "id": "78e6cd09-2cc7-4c12-99ee-d1179f197314",
+      "name": "Telegram Trigger"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "2f21b0ac-4833-4236-8ba1-c0eb0ca773ce",
+              "leftValue": "={{ Number($json.message?.from?.id) === Number('YOUR_TELEGRAM_USER_ID') && $json.message?.chat?.type === 'private' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        -48,
+        0
+      ],
+      "id": "903d05c9-6022-46b2-87f3-b6075719671b",
+      "name": "Перевірка власника"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "YOUR_NOTES_TABLE_ID",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "content": "={{ $json.output.content }}",
+            "category": "={{ $json.output.category }}",
+            "telegramUserId": "={{ Number($('Telegram Trigger').first().json.message.from.id) }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "content",
+              "displayName": "content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "telegramUserId",
+              "displayName": "telegramUserId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1216,
+        -576
+      ],
+      "id": "13703da3-bc82-4046-82ab-98686c5e2bd7",
+      "name": "Збереження нотатки"
+    },
+    {
+      "parameters": {
+        "text": "=\n{{\n  'Поточна дата і час: ' +\n  $now.setZone('Europe/Kyiv').toFormat('yyyy-MM-dd HH:mm cccc') +\n  '\\nЧасовий пояс: Europe/Kyiv' +\n\n  (\n    $json.originalMessage\n      ? '\\n\\nНЕЗАВЕРШЕНИЙ ПОПЕРЕДНІЙ ЗАПИТ:' +\n        '\\nПовідомлення: ' + $json.originalMessage +\n        '\\nIntent: ' + ($json.intent || '') +\n        '\\n\\nЯкщо нове повідомлення є відповіддю на уточнення, обʼєднай його з попереднім запитом та визнач повні параметри дії. Якщо користувач почав новий незалежний запит, обробляй тільки нове повідомлення.'\n      : ''\n  ) +\n\n  '\\n\\nПовідомлення користувача: ' +\n  $('Telegram Trigger').first().json.message.text\n}}\n",
+        "schemaType": "fromJson",
+        "jsonSchemaExample": "{\n  \"intent\": \"list_plans\",\n  \"content\": \"Показати плани на завтра\",\n  \"category\": \"general\",\n  \"plan_date\": \"\",\n  \"plan_time\": \"\",\n  \"duration_minutes\": 0,\n  \"reminder_minutes\": 0,\n  \"needs_clarification\": false,\n  \"clarification_question\": \"\",\n  \"range_start\": \"2026-10-28\",\n  \"range_end\": \"2026-10-29\"\n}",
+        "options": {
+          "systemPromptTemplate": "Ти — система розпізнавання намірів для персонального Telegram-помічника Mini Brain.\n\nКористувач пише українською або російською мовою.\nВизначай його намір і витягуй потрібні дані.\n\nМОЖЛИВІ INTENT:\n\nsave_note — зберегти нотатку або ідею.\nlist_notes — показати всі або останні нотатки.\nfind_note — знайти нотатку за словом або темою.\ncreate_plan — створити план, подію або нагадування.\nlist_plans — переглянути плани з календаря.\nchat — звичайна розмова або незрозумілий запит.\n\nПРАВИЛА ДЛЯ CONTENT:\n\nДля save_note — текст нотатки без зайвих слів.\nДля find_note — коротке ключове слово або фраза для пошуку.\nДля create_plan — назва події без дати та часу.\nДля інших намірів — короткий зміст запиту.\n\nКАТЕГОРІЇ:\n\nДля нотаток вибирай idea, personal, learning або general.\nДля інших намірів використовуй general.\n\nПРАВИЛА ДЛЯ СТВОРЕННЯ ПЛАНІВ:\n\n1. Використовуй поточну дату та час із вхідного тексту.\nЧасовий пояс — Europe/Kyiv.\n\n2. Розумій відносні дати:\nсьогодні, завтра, післязавтра, у п'ятницю,\nчерез три дні та інші.\n\n3. plan_date — YYYY-MM-DD.\n4. plan_time — HH:mm, формат 24 години.\n\n5. Якщо тривалість не зазначено:\nduration_minutes = 30.\n\n6. Якщо інтервал нагадування не зазначено:\nreminder_minutes = 0.\n\n7. Якщо користувач не вказав точну дату або час:\nneeds_clarification = true.\nclarification_question — коротке запитання.\n\n8. Не вигадуй дату чи час.\nЯкщо вказана дата або час уже минули,\nпопроси уточнення.\n\n9. Якщо все визначено:\nneeds_clarification = false.\nclarification_question = \"\".\n\nПРАВИЛА ДЛЯ ПЕРЕГЛЯДУ ПЛАНІВ:\n\nКоли intent = list_plans, визнач період пошуку.\n\nВикористовуй:\nrange_start — перший день періоду у форматі YYYY-MM-DD.\nrange_end — перший день після закінчення періоду\nу форматі YYYY-MM-DD.\n\nrange_end НЕ включається в період.\n\nПравила:\n\n\"Покажи плани на сьогодні\":\nrange_start = сьогодні\nrange_end = завтра\n\n\"Покажи плани на завтра\":\nrange_start = завтра\nrange_end = післязавтра\n\n\"Покажи плани на післязавтра\":\nrange_start = післязавтра\nrange_end = наступний день\n\n\"Покажи мої плани\":\nrange_start = сьогодні\nrange_end = сьогодні + 7 календарних днів\n\n\"Покажи плани на тиждень\":\nrange_start = сьогодні\nrange_end = сьогодні + 7 календарних днів\n\n\"Покажи плани на цей тиждень\":\nrange_start = понеділок поточного тижня\nrange_end = понеділок наступного тижня\n\n\"Покажи плани наступного тижня\":\nrange_start = понеділок наступного тижня\nrange_end = понеділок через тиждень після нього\n\n\"Покажи плани з 2 по 8 листопада\":\nrange_start = 2 листопада відповідного року\nrange_end = 9 листопада відповідного року\n\nЯкщо користувач назвав конкретну дату,\nзнайди плани саме на цю дату.\n\nЯкщо назвав конкретний тиждень або діапазон,\nвикористовуй відповідні дати.\n\nЯкщо неможливо однозначно визначити період:\nneeds_clarification = true.\nclarification_question = запитання про потрібні дати.\nrange_start = \"\"\nrange_end = \"\"\n\nПРАВИЛА ДЛЯ ІНШИХ НАМІРІВ:\n\nЯкщо intent НЕ create_plan:\nplan_date = \"\"\nplan_time = \"\"\nduration_minutes = 0\nreminder_minutes = 0\n\nЯкщо intent НЕ list_plans:\nrange_start = \"\"\nrange_end = \"\"\n\nЯкщо уточнення не потрібне:\nneeds_clarification = false\nclarification_question = \"\"\n\nПРИКЛАДИ:\n\n\"Запам'ятай ідею створити сайт\"\nintent = save_note\n\n\"Покажи мої нотатки\"\nintent = list_notes\n\n\"Знайди нотатку про YouTube\"\nintent = find_note\ncontent = \"YouTube\"\n\n\"Завтра о 15:00 забрати посилку, нагадай за 30 хвилин\"\nintent = create_plan\ncontent = \"Забрати посилку\"\nplan_time = \"15:00\"\nduration_minutes = 30\nreminder_minutes = 30\n\n\"Завтра треба забрати посилку\"\nintent = create_plan\nneeds_clarification = true\nclarification_question = \"О котрій годині потрібно забрати посилку?\"\n\n\"Що в мене завтра?\"\nintent = list_plans\n\n\"Які плани наступного тижня?\"\nintent = list_plans\n\n\"Привіт!\"\nintent = chat\n\nПРАВИЛА РОБОТИ З ПАМ'ЯТТЮ ДІАЛОГУ:\n\nУ вхідних даних може бути збережений попередній запит користувача (originalMessage та intent).\n\n1. Поточне повідомлення користувача завжди має пріоритет над пам'яттю.\n\n2. Якщо поточне повідомлення є відповіддю на попереднє уточнення (дата, час, період або інша відсутня інформація), об'єднай його зі збереженим запитом і визнач остаточний intent та всі потрібні дані.\n\n3. Якщо користувач написав нову самостійну команду, ігноруй попередній запит у пам'яті. Не змішуй дві різні команди.\n\n4. Якщо користувач змінив тему або скасував попередній запит, не використовуй його для створення планів чи інших дій.\n\n5. Якщо пам'ять порожня, обробляй поточне повідомлення як звичайний новий запит.\n\n6. Якщо після об'єднання повідомлень усе ще бракує обов'язкових даних, встанови needs_clarification = true та постав коротке запитання тільки про відсутню інформацію.\n\n7. Не вигадуй відсутні дані. Завжди повертай результат відповідно до наявної JSON-схеми."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1.2,
+      "position": [
+        432,
+        -240
+      ],
+      "id": "a990db01-3260-4369-941f-66435d4e0ef9",
+      "name": "AI — Розуміння повідомлення"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash-lite",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        496,
+        -48
+      ],
+      "id": "a0d49562-5253-42db-bc60-a06a60a282bc",
+      "name": "Google Gemini Chat Model"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.output.intent }}",
+                    "rightValue": "save_note",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "5d82a147-0a35-42fa-9d44-e25a9888ea69"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Зберегти нотатку"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "id": "c40c8dcf-8743-4ded-8abe-400d63f0ae89",
+                    "leftValue": "={{ $json.output.intent }}",
+                    "rightValue": "create_plan",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Створити план"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "id": "7a834a1c-7aeb-44ec-a3c6-051b2e155ccb",
+                    "leftValue": "={{ $json.output.intent }}",
+                    "rightValue": "list_plans",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Переглянути плани"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "id": "45253cb0-8423-4ab6-986b-3403a3c0d1e1",
+                    "leftValue": "={{ $json.output.intent }}",
+                    "rightValue": "find_note",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Знайти нотатку"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "id": "9ec8202c-0f28-4d91-be0d-33c8e7768097",
+                    "leftValue": "={{ $json.output.intent }}",
+                    "rightValue": "chat",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Звичайне повідомлення"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "id": "8a5e7d25-7c69-423b-b1bd-9f18f9da4183",
+                    "leftValue": "={{ $json.output.intent }}",
+                    "rightValue": "list_notes",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Показати нотатки"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.5,
+      "position": [
+        816,
+        -192
+      ],
+      "id": "02f7d0c7-a93a-423b-b479-5ab0587e34c2",
+      "name": "Вибір дії"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2304,
+        -96
+      ],
+      "id": "8f5ec7df-083a-409c-8cc3-c24c2bab02e4",
+      "name": "Підтвердження нотатки"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "YOUR_NOTES_TABLE_ID",
+          "mode": "list"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "telegramUserId",
+              "keyValue": "={{ Number($('Telegram Trigger').first().json.message.from.id) }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1216,
+        448
+      ],
+      "id": "a8e6869b-1d6f-4f0f-b32e-f255c94466b1",
+      "name": "Отримати мої нотатки",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const ai = $('AI — Розуміння повідомлення').first().json.output;\n\nconst notes = $input.all()\n  .map(item => item.json)\n  .filter(note => typeof note.content === 'string' && note.content.trim());\n\nlet text;\n\nif (ai.intent === 'find_note') {\n  const query = String(ai.content ?? '').trim().toLowerCase();\n\n  const found = query\n    ? notes.filter(note =>\n        note.content.toLowerCase().includes(query)\n      )\n    : [];\n\n  if (found.length === 0) {\n    text = '🔎 Нічого не знайдено за запитом: ' + (query || 'порожній запит');\n  } else {\n    const list = found\n      .map((note, index) => `${index + 1}. ${note.content}`)\n      .join('\\n\\n');\n\n    text = `🔎 Знайдено нотаток: ${found.length}\\n\\n${list}`;\n  }\n\n} else {\n  if (notes.length === 0) {\n    text = '📭 У тебе поки немає нотаток.';\n  } else {\n    const list = notes\n      .map((note, index) => `${index + 1}. ${note.content}`)\n      .join('\\n\\n');\n\n    text = `📝 Твої нотатки (${notes.length})\\n\\n${list}`;\n  }\n}\n\nreturn [{ json: { text } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1648,
+        448
+      ],
+      "id": "60cab1d5-5635-4a92-bd28-127ee9e95e91",
+      "name": "Формування списку нотаток"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3fd8759f-89fc-45d1-96bb-029f7d32219e",
+              "name": "text",
+              "value": "={{ '✅ Нотатку збережено!\\n\\n📝 ' + $('AI — Розуміння повідомлення').first().json.output.content + '\\n\\n🏷 Категорія: ' + $('AI — Розуміння повідомлення').first().json.output.category }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1648,
+        -576
+      ],
+      "id": "be3f5d04-1020-4ed8-a994-f542d73cb036",
+      "name": "Підготувати відповідь — нотатка"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_CALENDAR_ID",
+          "mode": "list"
+        },
+        "start": "={{ DateTime.fromISO($json.output.plan_date + 'T' + $json.output.plan_time, { zone: 'Europe/Kyiv' }).toISO() }}",
+        "end": "={{ DateTime.fromISO($json.output.plan_date + 'T' + $json.output.plan_time, { zone: 'Europe/Kyiv' }).plus({ minutes: Number($json.output.duration_minutes) || 30 }).toISO() }}",
+        "useDefaultReminders": false,
+        "additionalFields": {
+          "summary": "={{ $json.output.content }}"
+        },
+        "remindersUi": {
+          "remindersValues": [
+            {
+              "method": "popup",
+              "minutes": "={{ Number($json.output.reminder_minutes) }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1504,
+        -96
+      ],
+      "id": "b35e4040-7c98-4a65-9345-d8858ee0c55a",
+      "name": "Створення плану в календарі"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "3f6784ce-a2f0-4742-bbf3-2c79720a7884",
+              "leftValue": "={{\n  $json.output.needs_clarification === true ||\n  !/^\\d{4}-\\d{2}-\\d{2}$/.test(String($json.output.plan_date ?? '')) ||\n  !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(String($json.output.plan_time ?? '')) ||\n  !DateTime.fromISO(\n    $json.output.plan_date + 'T' + $json.output.plan_time,\n    { zone: 'Europe/Kyiv' }\n  ).isValid ||\n  DateTime.fromISO(\n    $json.output.plan_date + 'T' + $json.output.plan_time,\n    { zone: 'Europe/Kyiv' }\n  ).toMillis() <= $now.toMillis() ||\n  !(Number($json.output.duration_minutes) > 0) ||\n  !(Number($json.output.reminder_minutes) >= 0 &&\n    Number($json.output.reminder_minutes) <= 40320)\n}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1216,
+        -368
+      ],
+      "id": "aa0b0ed9-432a-4212-a7a6-e95680d40ba4",
+      "name": "Чи потрібно уточнення?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "56bfb9a2-efcf-48e9-b231-522a47076078",
+              "name": "text",
+              "value": "={{\n  '✅ План додано в Google Календар!\\n\\n' +\n  '📌 ' + $json.summary + '\\n\\n' +\n  '📅 ' + DateTime.fromISO($json.start.dateTime).setZone('Europe/Kyiv').toFormat('dd.MM.yyyy') + '\\n' +\n  '🕒 ' + DateTime.fromISO($json.start.dateTime).setZone('Europe/Kyiv').toFormat('HH:mm') +\n  '–' + DateTime.fromISO($json.end.dateTime).setZone('Europe/Kyiv').toFormat('HH:mm') + '\\n' +\n  '🔔 Нагадування за ' + ($json.reminders?.overrides?.[0]?.minutes ?? 0) + ' хв'\n}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1792,
+        -288
+      ],
+      "id": "cb8e23cc-b97a-415c-ba7b-e48ae18d958a",
+      "name": "Підготувати відповідь — план"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_CALENDAR_ID",
+          "mode": "list"
+        },
+        "returnAll": true,
+        "timeMin": "={{ DateTime.fromISO($json.output.range_start, { zone: 'Europe/Kyiv' }).startOf('day').toISO() }}",
+        "timeMax": "={{ DateTime.fromISO($json.output.range_end, { zone: 'Europe/Kyiv' }).startOf('day').toISO() }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1504,
+        80
+      ],
+      "id": "abdfb33d-8bf2-4519-8d55-91fae26ae6a1",
+      "name": "Отримати мої плани",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const events = $input.all()\n  .map(item => item.json)\n  .filter(event =>\n    event.start &&\n    (event.start.dateTime || event.start.date) &&\n    event.status !== 'cancelled'\n  );\n\nevents.sort((a, b) => {\n  const dateA = a.start.dateTime || a.start.date;\n  const dateB = b.start.dateTime || b.start.date;\n  return dateA.localeCompare(dateB);\n});\n\nconst formatDate = (event) => {\n  if (event.start.date) {\n    return event.start.date.split('-').reverse().join('.');\n  }\n\n  return new Intl.DateTimeFormat('uk-UA', {\n    timeZone: 'Europe/Kyiv',\n    day: '2-digit',\n    month: '2-digit',\n    year: 'numeric'\n  }).format(new Date(event.start.dateTime));\n};\n\nconst formatTime = (event) => {\n  if (!event.start.dateTime) {\n    return 'Увесь день';\n  }\n\n  return new Intl.DateTimeFormat('uk-UA', {\n    timeZone: 'Europe/Kyiv',\n    hour: '2-digit',\n    minute: '2-digit',\n    hourCycle: 'h23'\n  }).format(new Date(event.start.dateTime));\n};\n\nlet text;\n\nif (events.length === 0) {\n  text = '📭 На вибраний період планів немає.';\n} else {\n  const list = events.map((event, index) => {\n    const date = formatDate(event);\n    const time = formatTime(event);\n    const title = event.summary || 'Без назви';\n\n    return `${index + 1}. 📅 ${date}\\n🕒 ${time} — ${title}`;\n  }).join('\\n\\n');\n\n  text = `📋 Твої плани (${events.length})\\n\\n${list}`;\n}\n\nif (text.length > 3800) {\n  text = text.slice(0, 3700) + '\\n\\n… Список скорочено.';\n}\n\nreturn [{ json: { text } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        -64
+      ],
+      "id": "34587254-1690-4eef-98c4-76259fdcbb56",
+      "name": "Формування списку планів"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "6fd4386c-c21b-4537-97b2-03b80ad9df18",
+              "leftValue": "={{   $json.output.needs_clarification === true ||   !/^\\d{4}-\\d{2}-\\d{2}$/.test(String($json.output.range_start ?? '')) ||   !/^\\d{4}-\\d{2}-\\d{2}$/.test(String($json.output.range_end ?? '')) ||   !DateTime.fromISO(String($json.output.range_start ?? ''), { zone: 'Europe/Kyiv' }).isValid ||   !DateTime.fromISO(String($json.output.range_end ?? ''), { zone: 'Europe/Kyiv' }).isValid ||   DateTime.fromISO(String($json.output.range_end ?? ''), { zone: 'Europe/Kyiv' }).toMillis() <=   DateTime.fromISO(String($json.output.range_start ?? ''), { zone: 'Europe/Kyiv' }).toMillis() }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1216,
+        -128
+      ],
+      "id": "29ad92bc-bf1e-4fb7-aab5-ca3fc31edb29",
+      "name": "Перевірка періоду"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fd460d2a-8872-4bb7-9ac3-75625038d5c4",
+              "name": "text",
+              "value": "={{\n  '📅 ' + (\n    $('AI — Розуміння повідомлення').first().json.output.clarification_question ||\n    (\n      $('AI — Розуміння повідомлення').first().json.output.intent === 'list_plans'\n        ? 'Уточни, будь ласка, за яку дату або період показати плани.'\n        : 'Уточни, будь ласка, дату та точний час події.'\n    )\n  )\n}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1504,
+        -416
+      ],
+      "id": "c5cd78cd-8b3a-476a-8807-37e31b71f8e1",
+      "name": "Уточнення дати або часу"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "YOUR_MEMORY_TABLE_ID",
+          "mode": "list"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "telegramUserId",
+              "keyValue": "={{ Number($('Telegram Trigger').first().json.message.from.id) }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        192,
+        -96
+      ],
+      "id": "97834429-fe83-4a26-87bf-fc942d298203",
+      "name": "Отримати пам'ять діалогу",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "YOUR_MEMORY_TABLE_ID",
+          "mode": "list"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "telegramUserId",
+              "keyValue": "={{ Number($('Telegram Trigger').first().json.message.from.id) }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "telegramUserId": "={{ Number($('Telegram Trigger').first().json.message.from.id) }}",
+            "originalMessage": "={{ $('Telegram Trigger').first().json.message.text }}",
+            "intent": "={{ $('AI — Розуміння повідомлення').first().json.output.intent }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "telegramUserId",
+              "displayName": "telegramUserId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "originalMessage",
+              "displayName": "originalMessage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "intent",
+              "displayName": "intent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1504,
+        -256
+      ],
+      "id": "094c7409-3c78-44dd-91b5-5c787199e96b",
+      "name": "Зберегти пам'ять діалогу"
+    },
+    {
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "value": "YOUR_MEMORY_TABLE_ID",
+          "mode": "list"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "telegramUserId",
+              "keyValue": "={{ Number($('Telegram Trigger').first().json.message.from.id) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2768,
+        -192
+      ],
+      "id": "0d39d1ef-614e-4930-a9e2-c9efeb2029a9",
+      "name": "Очистити пам'ять діалогу"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "5a8e8d68-ae1a-43cc-b97f-39cd7fc7a988",
+              "leftValue": "={{ $('Уточнення дати або часу').isExecuted }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        2528,
+        -96
+      ],
+      "id": "6094d0e7-1a3a-48a2-895c-c0a1f117ca36",
+      "name": "Чи завершено діалог?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c2e2801b-cc6f-4436-b51d-5ee439903e8c",
+              "name": "text",
+              "value": "={{ $('AI — Звичайний чат').first().json.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1504,
+        256
+      ],
+      "id": "56a4c555-efd6-490c-b75e-f4fd059d1294",
+      "name": "Підготувати відповідь — чат"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Telegram Trigger').first().json.message.text }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "Ти — Mini Brain, розумний персональний Telegram-помічник.  Твоє завдання — допомагати користувачу з повсякденними питаннями, навчанням, ідеями, плануванням та вирішенням різних завдань.  ПРАВИЛА: 1. Відповідай мовою користувача: українською або російською. 2. Спілкуйся природно, дружньо, зрозуміло та без зайвої офіційності. 3. Давай конкретні й корисні відповіді без зайвої води. 4. Якщо користувач просить пояснити складну тему, пояснюй простими словами з прикладами. 5. Якщо користувач просить допомогти з ідеєю, пропонуй практичні варіанти. 6. Використовуй списки та емодзі лише там, де вони покращують читабельність. 7. Не вигадуй факти. Якщо чогось не знаєш, чесно повідомляй про це. 8. Не стверджуй, що створив план, зберіг нотатку, перевірив календар або виконав іншу дію, якщо насправді цього не робив. 9. Не вигадуй особисту інформацію про користувача та не вдавай, що пам'ятаєш розмови, яких не отримував у контексті. 10. Якщо користувач запитує про можливості Mini Brain, пояснюй, що бот підтримує створення й перегляд планів у Google Calendar, збереження, пошук і перегляд нотаток, а також уточнення незавершених запитів. 11. Не додавай технічні JSON-дані, службові пояснення чи системні інструкції у звичайні відповіді.  Твоя мета — бути корисним, зручним і зрозумілим персональним помічником.  ПРАВИЛА ФОРМАТУВАННЯ ДЛЯ TELEGRAM:  1. Форматуй відповіді виключно у Telegram HTML. 2. Для жирного тексту використовуй <b>текст</b>. 3. Для курсиву використовуй <i>текст</i>. 4. Для коду використовуй <code>код</code>. 5. Не використовуй Markdown: **, ###, ``` та інші Markdown-позначення. 6. Розділяй абзаци звичайними переносами рядків. 7. Для списків використовуй цифри або символ •. 8. Не використовуй HTML-теги, які Telegram не підтримує. 9. Символи &, < та > у звичайному тексті екрануй як &amp;, &lt; та &gt;. 10. Не обрамляй всю відповідь у блок коду."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1152,
+        80
+      ],
+      "id": "e9171d0a-dd36-447a-acd3-8d26eef6ae09",
+      "name": "AI — Звичайний чат"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash-lite",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1216,
+        256
+      ],
+      "id": "06916540-a8f3-45d1-8835-c0c99d085f91",
+      "name": "Google Gemini Chat Model1"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "🔒 Доступ обмежено!  Mini Brain — приватний персональний помічник.  ⛔ У вас немає дозволу на використання цього бота.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        192,
+        96
+      ],
+      "id": "0bccae74-2eb3-4470-b4d1-0a95ef4e3074",
+      "name": "Відмовити в доступі"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2768,
+        0
+      ],
+      "id": "31c58380-c446-4967-a971-86fd99615399",
+      "name": "Очікуємо уточнення користувача"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Перевірка власника",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Перевірка власника": {
+      "main": [
+        [
+          {
+            "node": "Отримати пам'ять діалогу",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Відмовити в доступі",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI — Розуміння повідомлення": {
+      "main": [
+        [
+          {
+            "node": "Вибір дії",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI — Розуміння повідомлення",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Вибір дії": {
+      "main": [
+        [
+          {
+            "node": "Збереження нотатки",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Чи потрібно уточнення?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Перевірка періоду",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Отримати мої нотатки",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI — Звичайний чат",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Отримати мої нотатки",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI — Звичайний чат",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Збереження нотатки": {
+      "main": [
+        [
+          {
+            "node": "Підготувати відповідь — нотатка",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Отримати мої нотатки": {
+      "main": [
+        [
+          {
+            "node": "Формування списку нотаток",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Формування списку нотаток": {
+      "main": [
+        [
+          {
+            "node": "Підтвердження нотатки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Підготувати відповідь — нотатка": {
+      "main": [
+        [
+          {
+            "node": "Підтвердження нотатки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Чи потрібно уточнення?": {
+      "main": [
+        [
+          {
+            "node": "Уточнення дати або часу",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Зберегти пам'ять діалогу",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Створення плану в календарі",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Створення плану в календарі": {
+      "main": [
+        [
+          {
+            "node": "Підготувати відповідь — план",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Підготувати відповідь — план": {
+      "main": [
+        [
+          {
+            "node": "Підтвердження нотатки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Отримати мої плани": {
+      "main": [
+        [
+          {
+            "node": "Формування списку планів",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Формування списку планів": {
+      "main": [
+        [
+          {
+            "node": "Підтвердження нотатки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Перевірка періоду": {
+      "main": [
+        [
+          {
+            "node": "Уточнення дати або часу",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Зберегти пам'ять діалогу",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Отримати мої плани",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Уточнення дати або часу": {
+      "main": [
+        [
+          {
+            "node": "Підтвердження нотатки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Отримати пам'ять діалогу": {
+      "main": [
+        [
+          {
+            "node": "AI — Розуміння повідомлення",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Підтвердження нотатки": {
+      "main": [
+        [
+          {
+            "node": "Чи завершено діалог?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Чи завершено діалог?": {
+      "main": [
+        [
+          {
+            "node": "Очистити пам'ять діалогу",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Очікуємо уточнення користувача",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Підготувати відповідь — чат": {
+      "main": [
+        [
+          {
+            "node": "Підтвердження нотатки",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI — Звичайний чат",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI — Звичайний чат": {
+      "main": [
+        [
+          {
+            "node": "Підготувати відповідь — чат",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": []
+}

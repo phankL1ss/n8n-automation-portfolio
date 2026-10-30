@@ -1,0 +1,404 @@
+{
+  "name": "Outreach CRM — Gmail Tracker",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "getAll",
+        "returnAll": true,
+        "filters": {
+          "q": "in:sent",
+          "readStatus": "both",
+          "receivedAfter": "={{ $json.LastProcessedAt }}"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        512,
+        0
+      ],
+      "id": "3fce5370-f2d7-4fce-bbb3-40d90d0e9c2c",
+      "name": "Gmail - Get Sent Emails"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "14596177-5594-43c5-a4af-54824a668876",
+      "name": "Every 15 Minutes"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nreturn $input.all().map(item => {\n  const data = item.json;\n\n  // Отримуємо email одержувача\n  const to = data.To || '';\n  const match = to.match(/<([^>]+)>/);\n  const email = (match ? match[1] : to)\n    .trim()\n    .toLowerCase();\n\n  // Отримуємо домен пошти\n  const domain = email.split('@')[1] || '';\n\n  // Перетворюємо дату листа\n  const sentDate = new Date(\n    Number(data.internalDate)\n  ).toISOString();\n\n  return {\n    json: {\n      Email: email,\n      Domain: domain,\n      SentDate: sentDate,\n      GmailMessageId: data.id\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        0
+      ],
+      "id": "313ba995-9a9a-4716-b0aa-599d33cfee93",
+      "name": "Code - Prepare Email Data"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_CONTACTS_TAB_ID",
+          "mode": "list"
+        },
+        "filtersUI": {
+          "values": []
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        960,
+        0
+      ],
+      "id": "d29024b8-8440-4054-9340-4185dc5dc25c",
+      "name": "Google Sheets - Get Existing Contacts",
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst emails = $(\"Code - Prepare Email Data\").all().map(i => i.json);\n\nconst saved = new Map(\n  $input.all()\n    .map(i => i.json)\n    .filter(r => r.Email)\n    .map(r => [String(r.Email).trim().toLowerCase(), r])\n);\n\n// Форматуємо дату за київським часом\nfunction formatDate(value) {\n  if (!value) return \"\";\n\n  const text = String(value).trim();\n\n  // Дата без секунд\n  if (/^\\d{2}\\.\\d{2}\\.\\d{4} \\d{2}:\\d{2}$/.test(text)) {\n    return text;\n  }\n\n  // Дата із секундами, які додає Google Sheets\n  if (/^\\d{2}\\.\\d{2}\\.\\d{4} \\d{2}:\\d{2}:\\d{2}$/.test(text)) {\n    return text.slice(0, 16);\n  }\n\n  const date = new Date(text);\n\n  if (isNaN(date.getTime())) {\n    throw new Error(\"Invalid date: \" + text);\n  }\n\n  const parts = new Intl.DateTimeFormat(\"en-GB\", {\n    timeZone: \"Europe/Kyiv\",\n    day: \"2-digit\",\n    month: \"2-digit\",\n    year: \"numeric\",\n    hour: \"2-digit\",\n    minute: \"2-digit\",\n    hourCycle: \"h23\"\n  }).formatToParts(date);\n\n  const p = Object.fromEntries(\n    parts.map(x => [x.type, x.value])\n  );\n\n  return `${p.day}.${p.month}.${p.year} ${p.hour}:${p.minute}`;\n}\n\n// Перетворення дати для правильного порівняння\nfunction dateKey(value) {\n  const formatted = formatDate(value);\n  const [date, time] = formatted.split(\" \");\n  const [day, month, year] = date.split(\".\");\n\n  return `${year}-${month}-${day} ${time}`;\n}\n\nconst changes = new Map();\n\nfor (const mail of emails) {\n  const email = String(mail.Email || \"\").trim().toLowerCase();\n\n  if (!email || !mail.SentDate) continue;\n\n  const date = formatDate(mail.SentDate);\n  const old = changes.get(email) || saved.get(email);\n\n  // Новий контакт\n  if (!old) {\n    changes.set(email, {\n      Company: \"\",\n      Email: email,\n      Domain: mail.Domain || \"\",\n      \"First Contact\": date,\n      \"Last Contact\": date,\n      Status: \"Надіслано\"\n    });\n\n    continue;\n  }\n\n  // Існуючий контакт\n  const previousFirst = formatDate(old[\"First Contact\"] || date);\n  const previousLast = formatDate(old[\"Last Contact\"] || date);\n\n  const first = dateKey(date) < dateKey(previousFirst)\n    ? date\n    : previousFirst;\n\n  const last = dateKey(date) > dateKey(previousLast)\n    ? date\n    : previousLast;\n\n  // Оновлюємо дати, але зберігаємо статус і назву\n  changes.set(email, {\n    Company: old.Company || \"\",\n    Email: email,\n    Domain: old.Domain || mail.Domain || \"\",\n    \"First Contact\": first,\n    \"Last Contact\": last,\n    Status: old.Status || \"Надіслано\"\n  });\n}\n\nreturn [...changes.values()].map(json => ({ json }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        0
+      ],
+      "id": "5c079e5e-9a21-422b-a8b3-cc5e44773367",
+      "name": "Code - Check Duplicates"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_CONTACTS_TAB_ID",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Company": "={{ $json.Company }}",
+            "Email": "={{ $json.Email }}",
+            "Domain": "={{ $json.Domain }}",
+            "First Contact": "={{ $json[\"First Contact\"] }}",
+            "Last Contact": "={{ $json[\"Last Contact\"] }}",
+            "Status": "={{ $json.Status }}"
+          },
+          "matchingColumns": [
+            "Email"
+          ],
+          "schema": [
+            {
+              "id": "Company",
+              "displayName": "Company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Domain",
+              "displayName": "Domain",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "First Contact",
+              "displayName": "First Contact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Last Contact",
+              "displayName": "Last Contact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1408,
+        0
+      ],
+      "id": "18c35ede-75fb-44e3-a420-a29c413c5f6b",
+      "name": "Google Sheets - Save Contact"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_SYNC_STATE_TAB_ID",
+          "mode": "list"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Key",
+              "lookupValue": "outreach"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        256,
+        0
+      ],
+      "id": "0ee349b8-ed9c-477c-a6f2-8488010092db",
+      "name": "Google Sheets - Get Sync State"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst messages = $(\"Gmail - Get Sent Emails\").all();\n\nconst timestamps = messages\n  .map(item => Number(item.json.internalDate))\n  .filter(Number.isFinite);\n\nif (timestamps.length === 0) {\n  return [];\n}\n\n// Час найновішого обробленого листа\nconst latest = Math.max(...timestamps);\n\n// Попередня дата синхронізації\nconst previous = Date.parse(\n  $(\"Google Sheets - Get Sync State\").first().json.LastProcessedAt\n);\n\n// Залишаємо запас 1 хвилину,\n// щоб не пропустити листи на межі синхронізації\nconst checkpoint = Math.max(\n  Number.isFinite(previous) ? previous : 0,\n  latest - 60000\n);\n\nreturn [{\n  json: {\n    Key: \"outreach\",\n    LastProcessedAt: new Date(checkpoint).toISOString()\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1632,
+        0
+      ],
+      "id": "ecccd3f8-5b47-490b-bcfc-243b37171ae3",
+      "name": "Code - Prepare Sync State"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "YOUR_SYNC_STATE_TAB_ID",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Key": "={{ $json.Key }}",
+            "LastProcessedAt": "={{ $json.LastProcessedAt }}"
+          },
+          "matchingColumns": [
+            "Key"
+          ],
+          "schema": [
+            {
+              "id": "Key",
+              "displayName": "Key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "LastProcessedAt",
+              "displayName": "LastProcessedAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1856,
+        0
+      ],
+      "id": "c97f357a-b482-40e5-99d0-e5daca5c4dde",
+      "name": "Google Sheets - Update Sync State"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Get Sync State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail - Get Sent Emails": {
+      "main": [
+        [
+          {
+            "node": "Code - Prepare Email Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Prepare Email Data": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Get Existing Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Get Existing Contacts": {
+      "main": [
+        [
+          {
+            "node": "Code - Check Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Check Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Save Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Get Sync State": {
+      "main": [
+        [
+          {
+            "node": "Gmail - Get Sent Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets - Save Contact": {
+      "main": [
+        [
+          {
+            "node": "Code - Prepare Sync State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Prepare Sync State": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets - Update Sync State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "nodeGroups": []
+}
