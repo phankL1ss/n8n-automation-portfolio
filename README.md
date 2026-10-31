@@ -20,6 +20,8 @@ Receives enquiries through a POST webhook, validates required fields, classifies
 
 **Tools:** n8n, Webhooks, Google Sheets, Telegram.
 
+<img width="1642" height="742" alt="Знімок екрана 2026-10-28 014707" src="https://github.com/user-attachments/assets/8c0454a5-20e9-42c0-bc05-28a5860f0173" />
+
 **Setup:**
 
 - Select your Google Sheets, Telegram, and webhook Header Auth credentials in the relevant nodes. Keep webhook authentication enabled.
@@ -47,6 +49,8 @@ A private Telegram assistant that uses Gemini to interpret requests. It supports
 
 **Tools:** n8n, Telegram, Google Gemini, Google Calendar, n8n Data Tables.
 
+<img width="1657" height="757" alt="Знімок екрана 2026-10-28 013919" src="https://github.com/user-attachments/assets/8d9999a0-2d0e-446d-83c9-cab3804195f6" />
+
 **Setup:**
 
 - Select your Telegram, Gemini, and Google Calendar credentials in all relevant nodes.
@@ -65,6 +69,8 @@ Runs every 15 minutes, reads sent Gmail messages since the saved synchronization
 This workflow tracks messages that have already been sent. It does not send outreach emails.
 
 **Tools:** n8n, Gmail, Google Sheets, JavaScript.
+
+<img width="1637" height="877" alt="Знімок екрана 2026-10-29 190815" src="https://github.com/user-attachments/assets/4cd02d3f-dd9d-469f-a088-7da28686a003" />
 
 **Setup:**
 
